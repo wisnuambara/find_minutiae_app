@@ -323,7 +323,7 @@ class CariMinutiaePage(ctk.CTkFrame):
         
         # Tombol Lanjut
         # PERBAIKAN FONT 9/13
-        lanjut_button = ctk.CTkButton(self.input_frame, text="LANJUT & PROSES", command=self.process_and_save, height=40, font=self.controller.FONT_SUBJUDUL, fg_color="#0d8427", hover_color="#18537a")
+        lanjut_button = ctk.CTkButton(self.input_frame, text="Ekstrak Minutiae", command=self.process_and_save, height=40, font=self.controller.FONT_SUBJUDUL, fg_color="#0d8427", hover_color="#18537a")
         lanjut_button.grid(row=5, column=0, pady=30, sticky="s")
 
 

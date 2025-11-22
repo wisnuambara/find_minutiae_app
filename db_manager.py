@@ -239,6 +239,7 @@ def init_db():
         )
     ''')
     
+    
     # Pastikan kolom-kolom users ada (migrasi bila perlu)
     try:
         ensure_user_columns(conn)
