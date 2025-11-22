@@ -282,6 +282,101 @@ class CariMinutiaePage(ctk.CTkFrame):
         self.extracted_image_holder = ctk.CTkLabel(self.display_frame, text="[Hasil Ekstraksi]", corner_radius=10, fg_color="gray25", width=250, height=180)
         self.extracted_image_holder.grid(row=3, column=0, sticky="nwe")
 
+        # ================== LOADING OVERLAY ==================
+
+    def _init_loading_overlay(self):
+        """Inisialisasi overlay loading (blur/dim + gif) sekali saja."""
+        if hasattr(self, "loading_overlay") and self.loading_overlay is not None:
+            return  # sudah pernah dibuat
+
+        # Frame full-screen di atas halaman ini
+        self.loading_overlay = ctk.CTkFrame(self, fg_color="black")  # gelap, efek "blur"
+        # Belum di-place, nanti di _show_loading_overlay
+
+        # Cari path loading.gif (di folder root/assets/loading.gif)
+        base_dir = os.path.dirname(os.path.dirname(__file__))  # .../find_minutiae_apps_forzippedchatgpt
+        gif_path = os.path.join(base_dir, "assets", "loading.gif")
+
+        self.loading_frames = []
+        self.loading_frame_index = 0
+        self.loading_anim_after_id = None
+
+        try:
+            from PIL import ImageSequence
+
+            gif = Image.open(gif_path)
+
+            # Ambil semua frame gif dan convert ke PhotoImage
+            for frame in ImageSequence.Iterator(gif):
+                frame = frame.convert("RGBA")
+                frame = frame.resize((128, 128), Image.LANCZOS)
+                self.loading_frames.append(ImageTk.PhotoImage(frame))
+
+        except Exception as e:
+            print(f"WARNING: Gagal memuat atau memproses loading.gif: {e}")
+            self.loading_frames = []
+
+        # Label di tengah untuk menampilkan gif / teks
+        self.loading_label = ctk.CTkLabel(
+            self.loading_overlay,
+            text="Memproses...",
+            font=self.controller.FONT_UTAMA
+        )
+        self.loading_label.place(relx=0.5, rely=0.5, anchor="center")
+
+        # Kalau ada frame gif, pakai frame pertama
+        if self.loading_frames:
+            self.loading_label.configure(image=self.loading_frames[0], text="")
+            self.loading_label.image = self.loading_frames[0]
+
+    def _animate_loading(self):
+        """Animasi gif loading (dipanggil berulang via after)."""
+        if (
+            not hasattr(self, "loading_overlay")
+            or self.loading_overlay is None
+            or not self.loading_frames
+        ):
+            return
+
+        self.loading_frame_index = (self.loading_frame_index + 1) % len(self.loading_frames)
+        frame = self.loading_frames[self.loading_frame_index]
+        self.loading_label.configure(image=frame, text="")
+        self.loading_label.image = frame
+
+        # Ulangi tiap 100 ms
+        self.loading_anim_after_id = self.after(100, self._animate_loading)
+
+    def _show_loading_overlay(self):
+        """Tampilkan overlay loading di atas seluruh halaman."""
+        self._init_loading_overlay()
+
+        # Tempatkan overlay menutupi seluruh frame halaman
+        self.loading_overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self.loading_overlay.lift()  # pastikan di paling atas
+
+        # Mulai animasi kalau ada frame
+        if self.loading_frames:
+            # reset index
+            self.loading_frame_index = 0
+            self.loading_label.configure(image=self.loading_frames[0], text="")
+            self.loading_label.image = self.loading_frames[0]
+            if self.loading_anim_after_id is None:
+                self.loading_anim_after_id = self.after(100, self._animate_loading)
+
+        self.update_idletasks()
+
+    def _hide_loading_overlay(self):
+        """Sembunyikan overlay loading."""
+        if hasattr(self, "loading_anim_after_id") and self.loading_anim_after_id is not None:
+            try:
+                self.after_cancel(self.loading_anim_after_id)
+            except Exception:
+                pass
+            self.loading_anim_after_id = None
+
+        if hasattr(self, "loading_overlay") and self.loading_overlay is not None:
+            self.loading_overlay.place_forget()
+            self.update_idletasks()
 
     def upload_file(self):
         self.filepath = filedialog.askopenfilename(
