@@ -32,6 +32,32 @@ class CTkDatePicker(ctk.CTkFrame):
             command=self.open_calendar
         )
         self.btn.pack(side="left")
+        
+    def reset_state(self):
+        """Bersihkan semua state pencarian saat user logout / mulai baru."""
+        self.filepath = None
+
+        # status
+        if hasattr(self, "label_status"):
+            self.label_status.configure(text="", text_color="white")
+
+        # preview gambar mentah
+        if hasattr(self, "label_mentah"):
+            self.label_mentah.configure(text="Belum ada gambar", image=None)
+            self.label_mentah.image = None  # penting: buang referensi CTkImage
+
+        # preview gambar ekstraksi
+        if hasattr(self, "label_ekstraksi"):
+            self.label_ekstraksi.configure(text="Belum ada hasil ekstraksi", image=None)
+            self.label_ekstraksi.image = None
+
+        # kalau ada entry judul / nomor LP / tanggal, bersihkan juga
+        if hasattr(self, "entry_judul"):
+            self.entry_judul.delete(0, "end")
+        if hasattr(self, "entry_nomor_lp"):
+            self.entry_nomor_lp.delete(0, "end")
+        if hasattr(self, "entry_tanggal"):
+            self.entry_tanggal.delete(0, "end")
 
     def open_calendar(self):
         if self.calendar_window:

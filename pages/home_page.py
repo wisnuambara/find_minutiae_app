@@ -13,6 +13,7 @@ class HomePage(ctk.CTkFrame):
         
     
     def create_header(self):
+        nama = getattr(self.controller, "logged_in_user_name", "Pengguna")
         header_frame = ctk.CTkFrame(self, fg_color="transparent")
         header_frame.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 10))
         header_frame.grid_columnconfigure(0, weight=1)
@@ -20,8 +21,21 @@ class HomePage(ctk.CTkFrame):
         ctk.CTkLabel(header_frame, text="Dashboard Utama", font=self.controller.FONT_JUDUL).grid(row=0, column=0, sticky="w")
         
         # Tombol Logout di Pojok Kanan Atas
-        logout_button = ctk.CTkButton(header_frame, text="Logout", command=self.controller.logout, fg_color="#cc3300", hover_color="#992600", font=self.controller.FONT_UTAMA)
-        logout_button.grid(row=0, column=1, sticky="e", padx=10)
+        # logout_button = ctk.CTkButton(header_frame, text="Logout", command=self.controller.logout, fg_color="#cc3300", hover_color="#992600", font=self.controller.FONT_UTAMA)
+        # logout_button.grid(row=0, column=1, sticky="e", padx=10)
+            # simpan label welcome sebagai atribut, supaya bisa di-update
+        self.logged_in_user_name = ctk.CTkLabel(
+            self,
+            text="",   # teksnya diisi di refresh_user()
+            font=self.controller.FONT_SUBJUDUL
+        )
+        self.logged_in_user_name.grid(row=0, column=1, sticky="e", padx=10)
+
+    def refresh_user(self):
+        """Update teks selamat datang sesuai user yang sedang login."""
+        nama = getattr(self.controller, "logged_in_user_name", "Pengguna")
+        self.welcome_label.configure(text=f"Selamat Datang {nama}, di Find Minutiae")
+        self.logged_in_user_name.configure(text=f" {nama}")
 
     def create_dashboard(self):
         dashboard_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -46,14 +60,17 @@ class HomePage(ctk.CTkFrame):
         id = getattr(self.controller, "logged_in_user_id", "ID Tidak Diketahui")
     
 
-        ctk.CTkLabel(
+            # simpan label welcome sebagai atribut, supaya bisa di-update
+        self.welcome_label = ctk.CTkLabel(
             self,
-            text=f"Selamat Datang {nama}, di Find Minutiae",
+            text="",   # teksnya diisi di refresh_user()
             font=self.controller.FONT_SUBJUDUL
-        ).grid(row=2, column=0, sticky="n", pady=50)
+        )
+        self.welcome_label.grid(row=2, column=0, sticky="n", pady=50)
 
     def refresh_data(self):
         """Ambil data dari DB dan update label dashboard."""
         umum, lokal = fetch_history_counts(id=self.controller.logged_in_user_id)
         self.umum_label.configure(text=str(umum))
         self.lokal_label.configure(text=str(lokal))
+        self.refresh_user()
