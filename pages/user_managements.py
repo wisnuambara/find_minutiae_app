@@ -2,29 +2,7 @@ import customtkinter as ctk
 import os
 from tkinter import messagebox
 from PIL import Image
-from db_manager import get_all_users, get_user_by_id, update_user, delete_user_and_history, register_user
-
-def _load_icon( filename, size=(18, 18)):
-    """
-    Load icon from folder icons/.
-    Return None if not found (button still works).
-    """
-    try:
-        path = os.path.join("icons", filename)
-        if os.path.exists(path):
-            pil = Image.open(path)
-            return ctk.CTkImage(light_image=pil, dark_image=pil, size=size)
-    except Exception:
-        pass
-    return None
-
-icons = {
-            "detail": _load_icon("eye.png"),
-            "edit": _load_icon("edit.png"),
-            "hapus": _load_icon("tongsampah.png"),
-            "kembali": _load_icon("kembali.png"),
-            "tambah": _load_icon("tambah.png")
-        }
+from db_manager import get_all_users, get_user_by_id, update_user, delete_user_and_history
 
 def cut_text(text, limit):
     if text is None:
@@ -55,7 +33,6 @@ class UserManagementPage(ctk.CTkFrame):
             "username": 200,
             "aksi": 100
         }
-        
 
         # layout
         self.grid_columnconfigure(0, weight=1)
@@ -76,7 +53,6 @@ class UserManagementPage(ctk.CTkFrame):
         header_frame = ctk.CTkFrame(self, fg_color="transparent")
         header_frame.grid(row=0, column=0, sticky="ew", padx=12, pady=(12,6))
         header_frame.grid_columnconfigure(0, weight=1)
-        header_frame.grid_columnconfigure(1, weight=0)  # kolom untuk tombol Tambah User
 
         ctk.CTkLabel(header_frame, text="Manajemen User",
                      font=self.controller.FONT_JUDUL,
@@ -84,19 +60,6 @@ class UserManagementPage(ctk.CTkFrame):
 
         ctk.CTkLabel(header_frame, text="Kelola akun terdaftar",
                      font=self.controller.FONT_SUBJUDUL).grid(row=1, column=0, sticky="w", pady=(2,0))
-
-        # Tombol Tambah User di pojok kanan atas sejajar header
-
-        btn_tambah = ctk.CTkButton(
-            header_frame,
-            text="Tambah User",
-            width=120,
-            image = icons.get("tambah"),
-            fg_color="#1f6aa5",
-            hover_color="#18537a",
-            command=lambda: self.controller.show_frame("TambahUser")
-        )
-        btn_tambah.grid(row=0, column=1, rowspan=2, padx=(8, 0), sticky="e")
 
     def _setup_table_frame(self):
         self.table_outer = ctk.CTkFrame(self, fg_color="gray15")
@@ -236,8 +199,17 @@ class UserManagementPage(ctk.CTkFrame):
             action = ctk.CTkFrame(row, fg_color="transparent")
             action.grid(row=0, column=4, padx=8, sticky="w")
 
+            icon = None
+            try:
+                path = os.path.join("icons", "eye.png")
+                if os.path.exists(path):
+                    pil = Image.open(path)
+                    icon = ctk.CTkImage(light_image=pil, dark_image=pil, size=(18,18))
+            except:
+                icon = None
+
             btn = ctk.CTkButton(
-                action, text="Detail", width=36, height=28, image=icons.get("detail"),
+                action, text="", width=36, height=28, image=icon,
                 fg_color="#1f6aa5", hover_color="#18537a",
                 command=lambda uid=u['id']: self.show_detail(uid)
             )
@@ -279,17 +251,15 @@ class UserDetailPage(ctk.CTkFrame):
         buttons = ctk.CTkFrame(header, fg_color="transparent")
         buttons.grid(row=0, column=1, sticky="e")
 
-    
+        ctk.CTkButton(buttons, text="Edit Data", width=90,
+                       command=self.enter_edit,
+                       fg_color="gray40", hover_color="gray25").pack(side="left", padx=6)
 
-        ctk.CTkButton(buttons, text="Edit Data", width=90, image=icons.get("edit"),
-                       command=self.enter_edit, 
-                       ).pack(side="left", padx=6)
-
-        ctk.CTkButton(buttons, text="Hapus", width=90, image=icons.get("hapus"),
+        ctk.CTkButton(buttons, text="Hapus", width=90,
                        command=self._delete,
                        fg_color="#cc3300", hover_color="#992600").pack(side="left", padx=6)
 
-        ctk.CTkButton(buttons, text="Kembali", width=90,image=icons.get("kembali"),
+        ctk.CTkButton(buttons, text="Kembali", width=90,
                        command=lambda: self.controller.show_frame("UserManagement")
                        ).pack(side="left", padx=6)
 
@@ -512,136 +482,3 @@ class UserEditPage(ctk.CTkFrame):
             self.controller.show_frame("UserDetail", data={"id": self.record_id})
         else:
             messagebox.showerror("Gagal", "Gagal menyimpan perubahan.")
-
-
-# --------------------------------------------------------
-#                HALAMAN: TAMBAH USER BARU
-# --------------------------------------------------------
-class TambahUserPage(ctk.CTkFrame):
-    def __init__(self, parent, controller):
-        super().__init__(parent, fg_color="gray17")
-        self.controller = controller
-
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
-
-        ctk.CTkLabel(
-            self,
-            text="Tambah User Baru",
-            font=controller.FONT_JUDUL
-        ).grid(row=0, column=0, padx=20, pady=(20,10), sticky="w")
-
-        self.card = ctk.CTkFrame(self, fg_color="gray15", corner_radius=10)
-        self.card.grid(row=1, column=0, padx=20, pady=10, sticky="nwe")
-        self.card.grid_columnconfigure(0, weight=1)
-
-        self._build_form()
-
-    def _build_form(self):
-        # Username
-        ctk.CTkLabel(self.card, text="Username:", anchor="w",
-                     font=self.controller.FONT_UTAMA).grid(row=0, column=0, padx=30, pady=(20,0), sticky="w")
-        self.entry_username = ctk.CTkEntry(self.card, placeholder_text="Contoh: hartono", font=self.controller.FONT_UTAMA)
-        self.entry_username.grid(row=1, column=0, padx=30, pady=(5,10), sticky="ew")
-
-        # Password
-        ctk.CTkLabel(self.card, text="Password:", anchor="w",
-                     font=self.controller.FONT_UTAMA).grid(row=2, column=0, padx=30, pady=(10,0), sticky="w")
-        self.entry_password = ctk.CTkEntry(self.card, placeholder_text="Contoh: ********", font=self.controller.FONT_UTAMA, show="*")
-        self.entry_password.grid(row=3, column=0, padx=30, pady=(5,10), sticky="ew")
-
-        # Nama Lengkap
-        ctk.CTkLabel(self.card, text="Nama Lengkap:", anchor="w",
-                     font=self.controller.FONT_UTAMA).grid(row=4, column=0, padx=30, pady=(10,0), sticky="w")
-        self.entry_full_name = ctk.CTkEntry(self.card, placeholder_text="Contoh: Hartono Projo Joyo ",  font=self.controller.FONT_UTAMA)
-        self.entry_full_name.grid(row=5, column=0, padx=30, pady=(5,10), sticky="ew")
-
-        # NRP
-        ctk.CTkLabel(self.card, text="NRP:", anchor="w",
-                     font=self.controller.FONT_UTAMA).grid(row=6, column=0, padx=30, pady=(10,0), sticky="w")
-        self.entry_nrp = ctk.CTkEntry(self.card, placeholder_text="Contoh: 04050195", font=self.controller.FONT_UTAMA)
-        self.entry_nrp.grid(row=7, column=0, padx=30, pady=(5,10), sticky="ew")
-
-        # Email
-        ctk.CTkLabel(self.card, text="Email:", anchor="w",
-                     font=self.controller.FONT_UTAMA).grid(row=8, column=0, padx=30, pady=(10,0), sticky="w")
-        self.entry_email = ctk.CTkEntry(self.card,placeholder_text="Contoh: hartono123@gmail.com", font=self.controller.FONT_UTAMA)
-        self.entry_email.grid(row=9, column=0, padx=30, pady=(5,10), sticky="ew")
-
-        # Jabatan
-        ctk.CTkLabel(self.card, text="Jabatan:", anchor="w",
-                     font=self.controller.FONT_UTAMA).grid(row=10, column=0, padx=30, pady=(10,0), sticky="w")
-        self.entry_jabatan = ctk.CTkEntry(self.card, placeholder_text="Contoh: Perwira Unit 1 Si Identifikasi Ditreskrimum Polda Bali", font=self.controller.FONT_UTAMA)
-        self.entry_jabatan.grid(row=11, column=0, padx=30, pady=(5,10), sticky="ew")
-
-        # Nomor HP
-        ctk.CTkLabel(self.card, text="Nomor HP:", anchor="w",
-                     font=self.controller.FONT_UTAMA).grid(row=12, column=0, padx=30, pady=(10,0), sticky="w")
-        self.entry_hp = ctk.CTkEntry(self.card, placeholder_text="Contoh: +6289670153354", font=self.controller.FONT_UTAMA)
-        self.entry_hp.grid(row=13, column=0, padx=30, pady=(5,10), sticky="ew")
-
-        # Tombol aksi
-        actions = ctk.CTkFrame(self.card, fg_color="transparent")
-        actions.grid(row=14, column=0, padx=30, pady=30, sticky="e")
-
-        btn_tambah = ctk.CTkButton(
-            actions,
-            text="Tambah",
-            fg_color="#1f6aa5",
-            hover_color="#18537a",
-            height=40,
-            command=self._on_tambah
-        )
-        btn_tambah.pack(side="left", padx=10)
-
-        btn_batal = ctk.CTkButton(
-            actions,
-            text="Kembali",
-            fg_color="gray40",
-            hover_color="gray25",
-            height=40,
-            command=lambda: self.controller.show_frame("UserManagement")
-        )
-        btn_batal.pack(side="left")
-
-    def _on_tambah(self):
-        username = self.entry_username.get().strip()
-        password = self.entry_password.get().strip()
-        full_name = self.entry_full_name.get().strip()
-        nrp = self.entry_nrp.get().strip()
-        email = self.entry_email.get().strip()
-        jabatan = self.entry_jabatan.get().strip()
-        hp = self.entry_hp.get().strip()
-
-        # Validasi: semua kolom wajib diisi
-        if not all([username, password, full_name, nrp, email, jabatan, hp]):
-            messagebox.showerror("Error", "Semua kolom harus diisi.")
-            return
-
-        ok = register_user(
-            username=username,
-            password=password,
-            full_name=full_name,
-            nrp=nrp,
-            jabatan=jabatan,
-            nomor_hp=hp,
-            email=email
-        )
-
-        if ok:
-            messagebox.showinfo("Sukses", "User baru berhasil ditambahkan.")
-            # reset form
-            self.entry_username.delete(0, ctk.END)
-            self.entry_password.delete(0, ctk.END)
-            self.entry_full_name.delete(0, ctk.END)
-            self.entry_nrp.delete(0, ctk.END)
-            self.entry_email.delete(0, ctk.END)
-            self.entry_jabatan.delete(0, ctk.END)
-            self.entry_hp.delete(0, ctk.END)
-
-            # kembali ke list
-            self.controller.show_frame("UserManagement")
-        else:
-            messagebox.showerror("Gagal", "Username sudah digunakan atau gagal menyimpan.")
-
-

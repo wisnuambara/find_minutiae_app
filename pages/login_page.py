@@ -4,7 +4,7 @@ from db_manager import check_user_credentials
 
 class LoginPage(ctk.CTkFrame):
     def __init__(self, parent, controller):
-        super().__init__(parent)
+        super().__init__(parent,fg_color="gray10")
         self.controller = controller
         
         self.grid_rowconfigure(0, weight=1)
@@ -30,11 +30,13 @@ class LoginPage(ctk.CTkFrame):
         self.password_entry.pack(padx=40)
 
         # Tombol Login
-        login_button = ctk.CTkButton(card_login, text="LOGIN", command=self.attempt_login, width=300, height=40, corner_radius=8, font=controller.FONT_UTAMA, fg_color="#1f6aa5", hover_color="#18537a")
+        login_button = ctk.CTkButton(card_login, text="Login", command=self.attempt_login, width=300, height=40, corner_radius=8, font=controller.FONT_UTAMA, fg_color="#1f6aa5", hover_color="#18537a")
         login_button.pack(pady=(40, 20), padx=40)
 
-        daftar_button = ctk.CTkButton(card_login, text="DAFTAR AKUN", command=lambda: controller.show_frame("Register"), width=300, height=40, corner_radius=8, font=controller.FONT_UTAMA, fg_color="#3a3f47", hover_color="#4a4f57")
-        daftar_button.pack(pady=(0, 20), padx=40)
+       #TOMBOL DAFTAR DIKOMENTRKAN, TIDAK DIPAKAI LAGI, jika ingin mengaktifkan kembali, hapus tanda pagar (#) di awal baris berikut
+       
+        # daftar_button = ctk.CTkButton(card_login, text="DAFTAR AKUN", command=lambda: controller.show_frame("Register"), width=300, height=40, corner_radius=8, font=controller.FONT_UTAMA, fg_color="#3a3f47", hover_color="#4a4f57")
+        # daftar_button.pack(pady=(0, 20), padx=40)
 
         self.login_message = ctk.CTkLabel(card_login, text="", text_color="red")
         self.login_message.pack(pady=(0, 20))

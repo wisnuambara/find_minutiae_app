@@ -10,7 +10,7 @@ from pages.home_page import HomePage
 from pages.cari_minutiae import CariMinutiaePage, HasilEkstraksiPage
 from pages.riwayat_page import RiwayatPencarianPage, DetailPage, EditPage
 from pages.register_page import RegisterPage
-from pages.user_management import UserManagementPage, UserDetailPage, UserEditPage
+from pages.user_management import UserManagementPage, UserDetailPage, UserEditPage, TambahUserPage
 
 
 # --- KONFIGURASI APLIKASI ---
@@ -104,6 +104,8 @@ class App(ctk.CTk):
                 frame = UserDetailPage(parent=self.container, controller=self)
             elif page_name == "UserEdit":
                 frame = UserEditPage(parent=self.container, controller=self)
+            elif page_name == "TambahUser":
+                frame = TambahUserPage(parent=self.container, controller=self)
             else:
                 return
 
@@ -160,23 +162,38 @@ class App(ctk.CTk):
 
     def login_success(self, user_id):
         """Dipanggil setelah login berhasil."""
-        # Simpan user yang login
+        # Simpan ID user
         self.logged_in_user_id = user_id
+        self.logged_in_user_level = 0      # default, nanti ditimpa
+        self.logged_in_user_name = None    # default
         print("[DEBUG] login_success: logged_in_user_id =", self.logged_in_user_id)
 
-        # Ambil nama user dari DB
+        # Ambil data lengkap user dari database
         try:
             from db_manager import get_user_by_id
             u = get_user_by_id(user_id)
             print("[DEBUG] login_success: user from db =", u)
 
-            self.logged_in_user_name = u.get("full_name") or u.get("username")
+            if u:
+                # simpan nama user
+                self.logged_in_user_name = u.get("full_name") or u.get("username")
+
+                # simpan level user (0=user biasa, 1=admin)
+                self.logged_in_user_level = u.get("level", 0)
+
         except Exception as e:
             print("[DEBUG] login_success: get_user_by_id error:", e)
-            self.logged_in_user_name = None
 
-        # Biarkan show_frame yang mengatur sidebar + layout
+        # Update sidebar sesuai level
+        try:
+            if hasattr(self, "sidebar") and hasattr(self.sidebar, "update_admin_menu"):
+                self.sidebar.update_admin_menu()
+        except Exception as e:
+            print("[DEBUG] login_success: update_admin_menu error:", e)
+
+        # Pindah halaman
         self.show_frame("Home")
+
 
     def logout(self):
         """Log out user dan kembali ke halaman login."""

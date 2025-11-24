@@ -592,6 +592,17 @@ class CariMinutiaePage(ctk.CTkFrame):
                     last_id = cursor.lastrowid
                     conn.commit()
                     conn.close()
+                    
+                    # 🔁 Setelah tahu ID history → pindahkan & rename file
+                    try:
+                        new_mentah, new_ekstraksi = db_manager.move_and_rename_history_images(
+                            last_id,
+                            path_mentah,
+                            path_ekstraksi
+                        )
+                        path_mentah, path_ekstraksi = new_mentah, new_ekstraksi
+                    except Exception as e:
+                        print(f"WARNING: gagal memindahkan file ke folder mentah/ekstraksi: {e}")
 
                     # Data untuk halaman hasil
                     result = {

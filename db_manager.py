@@ -9,7 +9,145 @@ import pandas as pd # Tambahkan Pandas untuk menangani DataFrame minutiae
 # Impor Pustaka Utama
 import cv2 # Digunakan untuk visualisasi fallback OpenCV
 from fingerflow.extractor import Extractor 
+import shutil 
 
+# =========================================================================
+# --- KONFIGURASI PATHS ---
+# =========================================================================
+
+# Tentukan direktori aplikasi saat ini
+BASE_DIR = os.path.dirname(os.path.abspath(__file__)) 
+DB_NAME = 'minutiae_app_fixed.db'
+DB_PATH = os.path.join(BASE_DIR, DB_NAME)
+MINUTIAE_COUNT = 0
+
+# Folder untuk menyimpan gambar mentah dan hasil ekstraksi
+DATA_DIR = os.path.join(BASE_DIR, 'data_kasus')
+MENTAH_DIR = os.path.join(DATA_DIR, 'mentah')
+EKSTRAKSI_DIR = os.path.join(DATA_DIR, 'ekstraksi')
+# Pastikan semua folder ada
+for d in (DATA_DIR, MENTAH_DIR, EKSTRAKSI_DIR):
+    os.makedirs(d, exist_ok=True)
+
+# Folder untuk model Fingerflow (.h5)
+MODEL_DIR = os.path.join(BASE_DIR, 'models') 
+os.makedirs(MODEL_DIR, exist_ok=True) 
+
+
+# =========================================================================
+# --- MANAJEMEN DATABASE (SQLite) ---
+# =========================================================================
+
+def get_db_connection():
+    """Membuat koneksi ke database SQLite."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row # Agar data bisa diakses seperti dictionary
+    return conn
+
+def ensure_user_columns(conn):
+    """
+    Pastikan kolom-kolom tambahan pada tabel users ada.
+    Fungsi ini aman dijalankan berulang kali — ia memeriksa pragma table_info.
+    """
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(users)")
+    existing = {row[1] for row in cursor.fetchall()}  # set of column names
+
+    # Kolom yang diinginkan beserta tipe SQLnya
+    columns = {
+        "full_name": "TEXT",
+        "nrp": "TEXT",
+        "jabatan": "TEXT",
+        "nomor_hp": "TEXT",
+        "email": "TEXT",
+        "is_admin": "INTEGER DEFAULT 0",
+        "level": "INTEGER DEFAULT 0",  # 0 = user biasa, 1 = admin
+        "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP"
+    }
+
+    for col, coldef in columns.items():
+        if col not in existing:
+            try:
+                cursor.execute(f"ALTER TABLE users ADD COLUMN {col} {coldef}")
+            except Exception as e:
+                # Jika gagal tambahkan, lewati (tidak fatal)
+                print(f"[migrasi] Gagal menambah kolom {col}: {e}")
+    conn.commit()
+
+
+def create_default_admin(conn, username="admin", password="123"):
+    """
+    Buat user admin default jika belum ada (berlaku untuk inisialisasi dev).
+    Password akan di-hash menggunakan hash_password.
+    level = 1 menandakan admin.
+    """
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE username=?", (username,))
+    if cursor.fetchone() is None:
+        ph = hash_password(password)
+        try:
+            # pastikan kolom is_admin & level sudah ada (ensure_user_columns sudah dipanggil di init_db)
+            cursor.execute(
+                "INSERT INTO users (username, password_hash, is_admin, level) VALUES (?, ?, ?, ?)",
+                (username, ph, 1, 1)
+            )
+            conn.commit()
+            print(f"[init_db] User admin '{username}' dibuat otomatis.")
+        except Exception as e:
+            print(f"[init_db] Gagal membuat admin: {e}")
+            
+def init_db():
+    """Menginisialisasi tabel database (hanya dipanggil sekali)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Tabel Users (diperluas menyimpan profil)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            full_name TEXT,
+            nrp TEXT,
+            jabatan TEXT,
+            nomor_hp TEXT,
+            email TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    
+    # Tabel History (Riwayat Pencarian)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            judul_kasus TEXT NOT NULL,
+            nomor_lp TEXT,
+            tanggal_kejadian TEXT,
+            path_mentah TEXT NOT NULL,
+            path_ekstraksi TEXT NOT NULL,
+            user_id INTEGER,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            minutiae_count INTEGER,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    ''')
+    
+    
+    # Pastikan kolom-kolom users ada (migrasi bila perlu)
+    try:
+        ensure_user_columns(conn)
+    except Exception as e:
+        print('[init_db] ensure_user_columns error:', e)
+
+    # Buat admin default jika belum ada
+    try:
+        create_default_admin(conn)
+    except Exception as e:
+        print('[init_db] create_default_admin error:', e)
+
+    conn.commit()
+    conn.close()
 # =========================================================================
 # --- IMPORT VISUALISASI FINGERFLOW (PERBAIKAN TERAKHIR) ---
 # =========================================================================
@@ -124,139 +262,6 @@ if draw_minutiae_func is None:
     print("Peringatan: Gagal mengimpor draw_minutiae. Menggunakan visualisasi manual (OpenCV).")
     # Tetapkan fungsi fallback manual sebagai visualizer
     draw_minutiae_func = draw_minutiae_fallback_cv2
-
-
-# =========================================================================
-# --- KONFIGURASI PATHS ---
-# =========================================================================
-
-# Tentukan direktori aplikasi saat ini
-BASE_DIR = os.path.dirname(os.path.abspath(__file__)) 
-DB_NAME = 'minutiae_app.db'
-DB_PATH = os.path.join(BASE_DIR, DB_NAME)
-MINUTIAE_COUNT = 0
-
-# Folder untuk menyimpan gambar mentah dan hasil ekstraksi
-DATA_DIR = os.path.join(os.path.dirname(BASE_DIR), 'data_kasus')
-os.makedirs(DATA_DIR, exist_ok=True) 
-
-# Folder untuk model Fingerflow (.h5)
-MODEL_DIR = os.path.join(BASE_DIR, 'models') 
-os.makedirs(MODEL_DIR, exist_ok=True) 
-
-
-# =========================================================================
-# --- MANAJEMEN DATABASE (SQLite) ---
-# =========================================================================
-
-def get_db_connection():
-    """Membuat koneksi ke database SQLite."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row # Agar data bisa diakses seperti dictionary
-    return conn
-
-
-
-def ensure_user_columns(conn):
-    """
-    Pastikan kolom-kolom tambahan pada tabel users ada.
-    Fungsi ini aman dijalankan berulang kali — ia memeriksa pragma table_info.
-    """
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA table_info(users)")
-    existing = {row[1] for row in cursor.fetchall()}  # set of column names
-
-    # Kolom yang diinginkan beserta tipe SQLnya
-    columns = {
-        "full_name": "TEXT",
-        "nrp": "TEXT",
-        "jabatan": "TEXT",
-        "nomor_hp": "TEXT",
-        "email": "TEXT",
-        "is_admin": "INTEGER DEFAULT 0",
-        "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP"
-    }
-
-    for col, coldef in columns.items():
-        if col not in existing:
-            try:
-                cursor.execute(f"ALTER TABLE users ADD COLUMN {col} {coldef}")
-            except Exception as e:
-                # Jika gagal tambahkan, lewati (tidak fatal)
-                print(f"[migrasi] Gagal menambah kolom {col}: {e}")
-    conn.commit()
-
-
-def create_default_admin(conn, username="admin", password="123"):
-    """
-    Buat user admin default jika belum ada (berlaku untuk inisialisasi dev).
-    Password akan di-hash menggunakan hash_password.
-    """
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE username=?", (username,))
-    if cursor.fetchone() is None:
-        ph = hash_password(password)
-        try:
-            cursor.execute("INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?)", (username, ph, 1))
-            conn.commit()
-            print(f"[init_db] User admin '{username}' dibuat otomatis.")
-        except Exception as e:
-            print(f"[init_db] Gagal membuat admin: {e}")
-def init_db():
-    """Menginisialisasi tabel database (hanya dipanggil sekali)."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Tabel Users
-    
-    # Tabel Users (diperluas menyimpan profil)
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            full_name TEXT,
-            nrp TEXT,
-            jabatan TEXT,
-            nomor_hp TEXT,
-            email TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    
-    # Tabel History (Riwayat Pencarian)
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            judul_kasus TEXT NOT NULL,
-            nomor_lp TEXT,
-            tanggal_kejadian TEXT,
-            path_mentah TEXT NOT NULL,
-            path_ekstraksi TEXT NOT NULL,
-            user_id INTEGER,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            minutiae_count INTEGER,
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        )
-    ''')
-    
-    
-    # Pastikan kolom-kolom users ada (migrasi bila perlu)
-    try:
-        ensure_user_columns(conn)
-    except Exception as e:
-        print('[init_db] ensure_user_columns error:', e)
-
-    # Buat admin default jika belum ada
-    try:
-        create_default_admin(conn)
-    except Exception as e:
-        print('[init_db] create_default_admin error:', e)
-
-    conn.commit()
-    conn.close()
-
 
 # =========================================================================
 # --- MANAJEMEN USER ---
@@ -574,15 +579,87 @@ def delete_history(history_id, path_mentah=None, path_ekstraksi=None):
         conn.close()
         return False
 
+def move_and_rename_history_images(history_id, old_path_mentah, old_path_ekstraksi):
+    """
+    Pindahkan dan rename file gambar mentah & ekstraksi
+    ke folder:
+      - data_kasus/mentah/ID_mentah.png
+      - data_kasus/ekstraksi/ID_ekstraksi.png
+    lalu update path di tabel history.
+
+    Return: (final_path_mentah, final_path_ekstraksi)
+    """
+    # Pastikan folder tujuan tetap ada (jaga-jaga)
+    os.makedirs(MENTAH_DIR, exist_ok=True)
+    os.makedirs(EKSTRAKSI_DIR, exist_ok=True)
+
+    new_mentah = None
+    new_ekstraksi = None
+
+    # --- Pindah & rename gambar mentah ---
+    if old_path_mentah and os.path.exists(old_path_mentah):
+        ext_mentah = os.path.splitext(old_path_mentah)[1] or ".png"
+        new_mentah = os.path.join(MENTAH_DIR, f"{history_id}_mentah{ext_mentah}")
+        try:
+            shutil.move(old_path_mentah, new_mentah)
+        except Exception as e:
+            print(f"WARNING: gagal memindahkan file mentah: {e}")
+            new_mentah = None
+
+    # --- Pindah & rename gambar ekstraksi ---
+    if old_path_ekstraksi and os.path.exists(old_path_ekstraksi):
+        ext_ekstraksi = os.path.splitext(old_path_ekstraksi)[1] or ".png"
+        new_ekstraksi = os.path.join(EKSTRAKSI_DIR, f"{history_id}_ekstraksi{ext_ekstraksi}")
+        try:
+            shutil.move(old_path_ekstraksi, new_ekstraksi)
+        except Exception as e:
+            print(f"WARNING: gagal memindahkan file ekstraksi: {e}")
+            new_ekstraksi = None
+
+    # --- Update path di database ---
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE history
+            SET path_mentah   = COALESCE(?, path_mentah),
+                path_ekstraksi = COALESCE(?, path_ekstraksi)
+            WHERE id = ?
+            """,
+            (new_mentah, new_ekstraksi, history_id),
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"WARNING: gagal update path history ID {history_id}: {e}")
+    finally:
+        conn.close()
+
+    # Kalau rename gagal, tetap kembalikan path lama supaya UI masih bisa pakai
+    final_mentah = new_mentah or old_path_mentah
+    final_ekstraksi = new_ekstraksi or old_path_ekstraksi
+    return final_mentah, final_ekstraksi
+
 
 # Inisialisasi DB saat modul dimuat (opsional, tapi disarankan)
+
+def force_admin_fix():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET level = 1, is_admin = 1 WHERE username = 'admin'")
+    conn.commit()
+    conn.close()
+    print("[FIX] Admin diperbaiki menjadi level=1")
+
 if __name__ == '__main__':
     init_db()
+    force_admin_fix()
     # Contoh pendaftaran admin saat pertama kali dijalankan
     if register_user("admin", "123"):
         print("Database terinisialisasi. User 'admin' (pass: 123) berhasil didaftarkan.")
     else:
         print("Database terinisialisasi. User 'admin' sudah ada.")
+
 
 
 # ---------------- User management helpers ----------------
@@ -604,7 +681,7 @@ def get_all_users():
     cols = _get_user_columns(conn)
     select_cols = ["id", "username"]
     # optional cols in preferred order
-    for c in ["full_name", "nrp", "jabatan", "nomor_hp", "email", "is_admin", "created_at"]:
+    for c in ["full_name", "nrp", "jabatan", "nomor_hp", "email", "is_admin", "level", "created_at"]:
         if c in cols:
             select_cols.append(c)
     sql = "SELECT " + ", ".join(select_cols) + " FROM users ORDER BY id DESC"
@@ -625,7 +702,7 @@ def get_user_by_id(user_id):
     conn = get_db_connection()
     cols = _get_user_columns(conn)
     select_cols = ["id", "username"]
-    for c in ["full_name", "nrp", "jabatan", "nomor_hp", "email", "is_admin", "created_at"]:
+    for c in ["full_name", "nrp", "jabatan", "nomor_hp", "email", "is_admin", "level", "created_at"]:
         if c in cols:
             select_cols.append(c)
     sql = "SELECT " + ", ".join(select_cols) + " FROM users WHERE id=?"
@@ -656,10 +733,13 @@ def update_user(user_id, full_name=None, nrp=None, jabatan=None, nomor_hp=None, 
     if email is not None:
         fields.append("email = ?"); params.append(email)
     if is_admin is not None:
-        # ensure column exists; if not, skip setting is_admin
+        # ensure column exists; if not, skip setting
         cols = _get_user_columns(conn)
+        val = 1 if is_admin else 0
         if "is_admin" in cols:
-            fields.append("is_admin = ?"); params.append(1 if is_admin else 0)
+            fields.append("is_admin = ?"); params.append(val)
+        if "level" in cols:
+            fields.append("level = ?"); params.append(val)
     if password is not None:
         ph = hash_password(password)
         fields.append("password_hash = ?"); params.append(ph)
@@ -694,4 +774,3 @@ def get_minutiae_count():
     """Mengembalikan jumlah minutiae dari ekstraksi terakhir."""
     global MINUTIAE_COUNT
     return MINUTIAE_COUNT
-

@@ -7,6 +7,30 @@ from db_manager import get_history_data, fetch_history_by_id, update_history_dat
 # ---------------------------
 # Helper: potong teks dengan ellipsis
 # ---------------------------
+
+def _load_icon( filename, size=(18, 18)):
+    """
+    Load icon from folder icons/.
+    Return None if not found (button still works).
+    """
+    try:
+        path = os.path.join("icons", filename)
+        if os.path.exists(path):
+            pil = Image.open(path)
+            return ctk.CTkImage(light_image=pil, dark_image=pil, size=size)
+    except Exception:
+        pass
+    return None
+
+icons = {
+            "detail": _load_icon("eye.png"),
+            "edit": _load_icon("edit.png"),
+            "hapus": _load_icon("tongsampah.png"),
+            "kembali": _load_icon("kembali.png"),
+            "tambah": _load_icon("tambah.png"),
+            "perbesar": _load_icon("perbesar.png")
+        }
+
 def cut_text(text, limit):
     if text is None:
         return "-"
@@ -228,21 +252,13 @@ class RiwayatPencarianPage(ctk.CTkFrame):
             action_frame = ctk.CTkFrame(row_frame, fg_color="transparent")
             action_frame.grid(row=0, column=5, sticky="w", padx=(4, 8))
 
-            icon_eye = None
-            try:
-                eye_img_path = os.path.join("icons", "eye.png")
-                if os.path.exists(eye_img_path):
-                    pil = Image.open(eye_img_path)
-                    icon_eye = ctk.CTkImage(light_image=pil, dark_image=pil, size=(18, 18))
-            except Exception:
-                icon_eye = None
 
             btn_detail = ctk.CTkButton(
                 action_frame,
-                text="",
+                text="Detail",
                 width=36,
                 height=28,
-                image=icon_eye,
+                image=icons.get("detail"),
                 fg_color="#1f6aa5",
                 hover_color="#18537a",
                 command=lambda rid=row_id: self.show_detail(rid)
@@ -296,9 +312,8 @@ class DetailPage(ctk.CTkFrame):
         self.btn_edit = ctk.CTkButton(
             action_frame,
             text="Edit Data",
+            image=icons.get("edit"),
             command=self.go_to_edit,
-            fg_color="gray40",
-            hover_color="gray25",
             width=80
         )
         self.btn_edit.pack(side="left", padx=5)
@@ -306,6 +321,7 @@ class DetailPage(ctk.CTkFrame):
         self.btn_delete = ctk.CTkButton(
             action_frame,
             text="Hapus",
+            image=icons.get("hapus"),
             command=self.delete_record,
             fg_color="#cc3300",
             hover_color="#992600",
@@ -315,6 +331,7 @@ class DetailPage(ctk.CTkFrame):
 
         self.btn_back = ctk.CTkButton(
             action_frame,
+            image=icons.get("kembali"),
             text="Kembali",
             command=lambda: self.controller.show_frame("RiwayatPencarian"),
             width=80
@@ -439,6 +456,7 @@ class DetailPage(ctk.CTkFrame):
         self.btn_perbesar = ctk.CTkButton(
             image_panel,
             text="Perbesar",
+            image=icons.get("perbesar"),
             font=self.controller.FONT_UTAMA,
             command=self.show_fullscreen_comparison
         )
